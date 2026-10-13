@@ -1,0 +1,9 @@
+.env
+.env.*
+!.env.example
+bin/
+.git
+.github
+.cursor
+*.md
+docker-compose.yml

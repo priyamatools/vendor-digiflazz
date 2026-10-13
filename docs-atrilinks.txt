@@ -1,0 +1,111 @@
+Metode Transaksi
+Tersedia 4 metode transaksi. Semua metode menghasilkan response yang sama — perbedaan hanya di cara kirim request.
+
+Metode	Endpoint	Sign	Ket
+Atrilinks	/h2h/trx/atrilinks	BLAKE3	Paling aman
+Otomax	/h2h/trx/otomax	SHA1	Kompatibel Otomax
+Query	/h2h/trx/query	—	Simple GET
+JSON	/h2h/trx/json	—	POST JSON
+Metode Atrilinks direkomendasikan. Metode Query & JSON hanya mengandalkan IP whitelist.
+
+Catatan: response Atrilinks punya field status string (success/pending/failed) dan info — TIDAK ada rc atau status 0/1/2 Digiflazz. Mapping ke rc/status Digiflazz dilakukan di addon.
+
+=== Addon vendor Digiflazz (proyek ini) ===
+Metode: **Query** — GET /h2h/trx/query + pin (+ pass opsional). Tanpa BLAKE3/sign (tidak akses panel).
+Wajib kirim **urlcallback** = URL publik addon (notifikasi status dari Atrilinks → addon).
+Addon wajib expose endpoint HTTP untuk menerima callback; lalu update DB dan webhook ke Digiflazz jika status final.
+Keamanan Query: IP whitelist di sisi Atrilinks + PIN/pass di .env + HTTPS; jangan log URL yang memuat pin/pass.
+
+Parameter (semua metode)
+Param	Wajib	Keterangan
+reqid	Ya	Request ID unik dari Anda
+userid	Ya	Kode member
+kodeproduk	Ya	Kode produk
+tujuan	Ya	Nomor HP / ID Pelanggan
+jenistrx	Ya	1=Fixed, 2=Open, 3=Inquiry, 4=Payment, 5=Check
+urlcallback	Ya	URL callback notifikasi
+sign	Atrilinks/Otomax	Signature
+pass	Query/JSON	Password (plain)
+pin	Query/JSON	PIN (plain)
+nominaltrx	jenistrx=2	Nominal top up (open)
+kodebayar	jenistrx=4	Kode dari hasil inquiry
+Contoh Request (Atrilinks)
+GET /h2h/trx/atrilinks?reqid=TRX001&userid=LS001&kodeproduk=xl10&tujuan=08123456789&jenistrx=1&sign=abc123...&urlcallback=https://yoursite.com/callback
+Contoh Request (JSON)
+POST /h2h/trx/json
+Content-Type: application/json
+
+{
+  "reqid": "TRX001",
+  "userid": "LS001",
+  "pass": "yourpassword",
+  "pin": "1234",
+  "kodeproduk": "xl10",
+  "tujuan": "08123456789",
+  "jenistrx": 1,
+  "urlcallback": "https://yoursite.com/callback"
+}
+
+Transaksi Fixed
+jenistrx 1
+Pembelian produk berharga tetap (fixed) — pulsa, paket data, token PLN, voucher, top up game. Kirim jenistrx=1.
+
+GET (addon: format Query)
+http://api.atrilinks.com/h2h/trx/query
+Copy
+Contoh Request (addon)
+Copy
+$ curl "http://api.atrilinks.com/h2h/trx/query?reqid=16115009&userid=LS001&kodeproduk=pln50&tujuan=163000191067&jenistrx=1&limitharga=55000&pin=******&urlcallback=https://addon-anda.com/h2h/atrilinks/callback"
+Response
+200 OK
+Token PLN
+E-Wallet
+Game
+Global Success
+Gagal
+Copy
+{"reqid":"16115009","status":"success","jenis":"fixed","kode":"pln50","tujuan":"163000191067","harga":51760,"saldo":856841510,"bukti":"0482-3001-6419-9558-7075","info":"ok success","detail":"DataTransaksi{Nama Produk:Token PLN 50K||ID PLN:163000191067||Nama Pelanggan:MUHAMMAD AMIN||TarifDaya:R1M/900 VA||Kwh:34,9 ||Token:0482-3001-6419-9558-7075}DataBiaya{}"}
+Parsing Response · Token PLN
+Prioritas 1
+· didahulukan
+Response dikirim sebagai satu baris JSON (tanpa spasi/baris baru). Salin Kata Kunci, Regex, dan Data Trx berikut ke software Anda. Prioritas kecil dicek lebih dulu.
+
+Kata Kunci
+Copy
+status":"success","jenis":"fixed","kode":"pln
+Regex (named capture)
+Copy
+reqid":"(?P<idtrx>\d+)","status":"(?P<status>\w+)".*?"kode":"(?P<kodeproduk>[^"]+)","tujuan":"(?P<tujuan>\d+)","harga":(?P<hargamodal>\d+),"saldo":(?P<saldovendor>\d+).*?Nama Pelanggan:(?P<namapelanggan>[^|]+).*?TarifDaya:(?P<tarif>.+?)\/(?P<daya>[^|]+)\|\|Kwh:(?P<kwh>[\d,.]+).*?Token:(?P<bukti>[\d-]+)
+Data Trx (template detail)
+Copy
+DataTransaksi{Nama Produk:[namaproduk]||ID Pelanggan:[tujuan]||Nama Pelanggan:[namapelanggan]||Tarif/Daya:[tarif]/[daya]||Kwh Didapat:[kwh]Kwh||Token:[bukti]}DataBiaya{}
+
+Cek Status Hari Ini
+Cek status transaksi yang dibuat HARI INI berdasarkan reqid + userid + tujuan.
+
+Bentuk response SAMA PERSIS dengan response transaksi aslinya (jenis fixed/open/payment, status success/pending/failed) sesuai jenis & status transaksi yang dicek. Gunakan Kata Kunci & Regex yang sama seperti di menu Transaksi untuk parsing. Bila transaksi tidak ditemukan, response berupa objek error: status, reqid, userid, tujuan, info.
+
+GET
+http://api.atrilinks.com/h2h/trx/checktoday
+Copy
+Parameter
+Nama	Wajib	Keterangan
+reqid	required	ID transaksi (reqid) yang ingin dicek
+userid	required	Kode member Anda
+tujuan	required	Nomor tujuan transaksi
+Contoh Request
+Copy
+$ curl "http://api.atrilinks.com/h2h/trx/checktoday?reqid=16115009&userid=LS001&tujuan=163000191067"
+Response
+200 OK
+Sukses
+Pending
+Tidak Ditemukan
+Copy
+{"reqid":"16115009","status":"success","jenis":"fixed","kode":"pln50","tujuan":"163000191067","harga":51760,"saldo":856841510,"bukti":"0482-3001-6419-9558-7075","info":"oke success","detail":"DataTransaksi{Nama Produk:Token PLN 50K||ID PLN:163000191067||Nama Pelanggan:MUHAMMAD AMIN||TarifDaya:R1M/900 VA||Kwh:34,9 ||Token:0482-3001-6419-9558-7075}DataBiaya{}"}
+
+
+Format Atrilinks / Otomax (tidak dipakai addon vendor)
+/h2h/trx/atrilinks (BLAKE3) dan /h2h/trx/otomax (SHA1) — butuh sign dari panel.
+BLAKE3: combined = "{reqid}|{kodeproduk}|{tujuan}:{userid}:{encryptedPass}:{encryptedPin}:Atrilinks", sign = BLAKE3(combined).hex()
+Addon memakai Query saja; urlcallback tetap wajib di setiap order.
