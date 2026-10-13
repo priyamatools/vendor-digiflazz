@@ -3,6 +3,8 @@ name: Build and push to Docker Hub
 on:
   push:
     branches: [main, master]
+    tags:
+      - "v*"
   workflow_dispatch:
 
 jobs:
@@ -26,6 +28,8 @@ jobs:
           images: ${{ secrets.DOCKERHUB_USERNAME }}/vendor-digiflazz
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
             type=sha,prefix=
 
       - name: Build and push

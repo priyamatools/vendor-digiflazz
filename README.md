@@ -88,7 +88,21 @@ docker compose up -d
 
 **Lokal (Go):** Postgres harus reachable dari `DATABASE_URL`; lihat komentar di `.env.example` dan `docker-compose.yml`.
 
-**CI:** workflow GitHub Actions mem-build dan push image ke Docker Hub (secrets `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN`).
+**CI**
+
+| Workflow | Trigger | Hasil |
+|----------|---------|--------|
+| `release.yml` | Push tag `v*` (mis. `v1.0.0`) | Binary Linux / Windows / macOS (amd64 & arm64) + `migrations/`, di [GitHub Releases](https://docs.github.com/en/repositories/releasing-projects-on-github/managing-releases-in-a-repository) |
+| `docker-hub.yml` | Push `main` / tag `v*` | Image Docker Hub |
+
+```bash
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+Artefak: `vendor-digiflazz-v1.0.0-linux-amd64.tar.gz`, `...-windows-amd64.zip`, `...-darwin-arm64.tar.gz`, dll. (berisi binary + folder `migrations`).
+
+Docker Hub: secrets `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN`.
 
 ## Lisensi
 
