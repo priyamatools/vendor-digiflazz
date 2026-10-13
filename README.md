@@ -48,7 +48,7 @@ Konvensi implementasi dan mapping detail juga ada di `.cursor/rules/digiflazz-ve
 
 Salin [`.env.example`](./.env.example) ke `.env`. Variabel utama:
 
-- **Server:** `HTTP_PORT`, `DATABASE_URL`
+- **Server:** `HTTP_PORT`, `DATABASE_URL`, `APP_ENV` (`development` / `DEV_MODE=true` / `LOG_LEVEL=debug` untuk log request Digiflazz & response Atrilinks)
 - **Digiflazz:** `DIGIFLAZZ_API_USERNAME`, `DIGIFLAZZ_API_KEY`, `DIGIFLAZZ_CALLBACK_URL`
 - **Atrilinks:** `ATRILINKS_BASE_URL`, `ATRILINKS_USER_ID`, `ATRILINKS_PIN`, `ATRILINKS_PASS` (opsional), `ADDON_ATRILINKS_CALLBACK_URL`
 

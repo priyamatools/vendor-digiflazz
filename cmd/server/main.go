@@ -22,12 +22,19 @@ import (
 )
 
 func main() {
-	log := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
-
 	cfg, err := config.Load()
 	if err != nil {
-		log.Error("config", "err", err)
+		slog.Error("config", "err", err)
 		os.Exit(1)
+	}
+
+	logLevel := slog.LevelInfo
+	if cfg.Development {
+		logLevel = slog.LevelDebug
+	}
+	log := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: logLevel}))
+	if cfg.Development {
+		log.Info("development mode enabled", "http_debug", true)
 	}
 
 	ctx := context.Background()
@@ -51,6 +58,8 @@ func main() {
 		cfg.AtrilinksPIN,
 		cfg.AtrilinksPass,
 		cfg.AddonAtrilinksCallbackURL,
+		log,
+		cfg.Development,
 	)
 	webhook := digiflazz.NewWebhookClient(cfg.DigiflazzCallbackURL)
 	svc := service.NewTopupService(cfg, repo, atClient, webhook, log)
@@ -60,8 +69,8 @@ func main() {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("ok"))
 	})
-	dfHandler := handler.NewDigiflazzHandler(svc)
-	atCallback := handler.NewAtrilinksCallbackHandler(svc)
+	dfHandler := handler.NewDigiflazzHandler(svc, log, cfg.Development)
+	atCallback := handler.NewAtrilinksCallbackHandler(svc, log, cfg.Development)
 	mux.HandleFunc("/api/digiflazz/topup", dfHandler.Topup)
 	mux.HandleFunc("/h2h/atrilinks/callback", atCallback.Callback)
 

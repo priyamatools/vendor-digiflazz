@@ -4,12 +4,14 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/joho/godotenv"
 )
 
 type Config struct {
 	HTTPPort int
+	Development bool
 
 	DatabaseURL string
 
@@ -38,6 +40,7 @@ func Load() (Config, error) {
 
 	cfg := Config{
 		HTTPPort:                  port,
+		Development:               isDevelopment(),
 		DatabaseURL:               os.Getenv("DATABASE_URL"),
 		DigiflazzUsername:         os.Getenv("DIGIFLAZZ_API_USERNAME"),
 		DigiflazzAPIKey:           os.Getenv("DIGIFLAZZ_API_KEY"),
@@ -73,4 +76,18 @@ func envOr(key, def string) string {
 		return v
 	}
 	return def
+}
+
+func isDevelopment() bool {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv("APP_ENV"))) {
+	case "development", "dev", "local":
+		return true
+	}
+	if v := strings.ToLower(strings.TrimSpace(os.Getenv("DEV_MODE"))); v == "true" || v == "1" {
+		return true
+	}
+	if strings.EqualFold(strings.TrimSpace(os.Getenv("LOG_LEVEL")), "debug") {
+		return true
+	}
+	return false
 }

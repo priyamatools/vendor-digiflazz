@@ -4,22 +4,27 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/addon-vendor-digiflazz/internal/httplog"
 )
 
 type Client struct {
-	baseURL      string
-	userID       string
-	pin          string
-	pass         string
-	urlCallback  string
-	httpClient   *http.Client
+	baseURL     string
+	userID      string
+	pin         string
+	pass        string
+	urlCallback string
+	httpClient  *http.Client
+	log         *slog.Logger
+	dev         bool
 }
 
-func NewClient(baseURL, userID, pin, pass, urlCallback string) *Client {
+func NewClient(baseURL, userID, pin, pass, urlCallback string, log *slog.Logger, development bool) *Client {
 	baseURL = strings.TrimRight(baseURL, "/")
 	return &Client{
 		baseURL:     baseURL,
@@ -30,6 +35,8 @@ func NewClient(baseURL, userID, pin, pass, urlCallback string) *Client {
 		httpClient: &http.Client{
 			Timeout: 60 * time.Second,
 		},
+		log: log,
+		dev: development,
 	}
 }
 
@@ -58,7 +65,11 @@ func (c *Client) Order(ctx context.Context, p OrderParams) ([]byte, TransactionR
 	}
 
 	u := c.baseURL + "/h2h/trx/query?" + q.Encode()
-	return c.doGET(ctx, u)
+	if c.dev {
+		httplog.AtrilinksOrder(c.log, "/h2h/trx/query", httplog.RedactAtrilinksURL(u),
+			p.ReqID, p.KodeProduk, p.Tujuan, p.JenisTrx, p.LimitHarga)
+	}
+	return c.doGET(ctx, u, p.ReqID)
 }
 
 func (c *Client) CheckToday(ctx context.Context, reqID, tujuan string) ([]byte, TransactionResponse, error) {
@@ -68,10 +79,18 @@ func (c *Client) CheckToday(ctx context.Context, reqID, tujuan string) ([]byte, 
 	q.Set("tujuan", tujuan)
 
 	u := c.baseURL + "/h2h/trx/checktoday?" + q.Encode()
-	return c.doGET(ctx, u)
+	if c.dev {
+		c.log.Debug("atrilinks request",
+			"endpoint", "/h2h/trx/checktoday",
+			"url", httplog.RedactAtrilinksURL(u),
+			"reqid", reqID,
+			"tujuan", tujuan,
+		)
+	}
+	return c.doGET(ctx, u, reqID)
 }
 
-func (c *Client) doGET(ctx context.Context, u string) ([]byte, TransactionResponse, error) {
+func (c *Client) doGET(ctx context.Context, u string, refID string) ([]byte, TransactionResponse, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
 		return nil, TransactionResponse{}, err
@@ -84,13 +103,30 @@ func (c *Client) doGET(ctx context.Context, u string) ([]byte, TransactionRespon
 
 	raw, err := io.ReadAll(io.LimitReader(res.Body, 1<<20))
 	if err != nil {
+		if c.dev {
+			httplog.AtrilinksResponse(c.log, refID, res.StatusCode, raw, nil, err)
+		}
 		return nil, TransactionResponse{}, err
 	}
 	if res.StatusCode < 200 || res.StatusCode >= 300 {
-		return raw, TransactionResponse{}, fmt.Errorf("atrilinks http %d", res.StatusCode)
+		parseErr := fmt.Errorf("atrilinks http %d", res.StatusCode)
+		if c.dev {
+			httplog.AtrilinksResponse(c.log, refID, res.StatusCode, raw, nil, parseErr)
+		}
+		return raw, TransactionResponse{}, parseErr
 	}
 
 	tr, err := ParseTransactionResponse(raw)
+	if c.dev {
+		httplog.AtrilinksResponse(c.log, refID, res.StatusCode, raw, map[string]string{
+			"status": tr.Status,
+			"jenis":  tr.Jenis,
+			"kode":   tr.Kode,
+			"tujuan": tr.Tujuan,
+			"info":   tr.Info,
+			"bukti":  tr.Bukti,
+		}, err)
+	}
 	if err != nil {
 		return raw, TransactionResponse{}, err
 	}

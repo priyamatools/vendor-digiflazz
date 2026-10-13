@@ -2,17 +2,21 @@ package handler
 
 import (
 	"io"
+	"log/slog"
 	"net/http"
 
+	"github.com/addon-vendor-digiflazz/internal/httplog"
 	"github.com/addon-vendor-digiflazz/internal/service"
 )
 
 type AtrilinksCallbackHandler struct {
 	svc *service.TopupService
+	log *slog.Logger
+	dev bool
 }
 
-func NewAtrilinksCallbackHandler(svc *service.TopupService) *AtrilinksCallbackHandler {
-	return &AtrilinksCallbackHandler{svc: svc}
+func NewAtrilinksCallbackHandler(svc *service.TopupService, log *slog.Logger, development bool) *AtrilinksCallbackHandler {
+	return &AtrilinksCallbackHandler{svc: svc, log: log, dev: development}
 }
 
 func (h *AtrilinksCallbackHandler) Callback(w http.ResponseWriter, r *http.Request) {
@@ -33,8 +37,14 @@ func (h *AtrilinksCallbackHandler) Callback(w http.ResponseWriter, r *http.Reque
 		http.Error(w, "empty body", http.StatusBadRequest)
 		return
 	}
+	if h.dev {
+		httplog.AtrilinksCallback(h.log, raw)
+	}
 
 	if err := h.svc.HandleAtrilinksCallback(r.Context(), raw); err != nil {
+		if h.dev {
+			h.log.Debug("atrilinks callback error", "err", err.Error())
+		}
 		http.Error(w, "callback failed", http.StatusBadRequest)
 		return
 	}
