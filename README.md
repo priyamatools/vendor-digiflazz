@@ -11,7 +11,7 @@ Set repository secrets di GitHub (`Settings` → `Secrets and variables` → `Ac
 | `DOCKERHUB_USERNAME` | Username Docker Hub |
 | `DOCKERHUB_TOKEN` | Access token Docker Hub (bukan password akun) |
 
-Push ke branch `main` mem-build image `priyamatools/vendor-digiflazz:latest`.
+Push ke branch `main` mem-build image `<DOCKERHUB_USERNAME>/vendor-digiflazz:latest` (username harus sama dengan secret login).
 
 ## Menjalankan lokal
 
