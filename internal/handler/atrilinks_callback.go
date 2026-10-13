@@ -1,10 +1,10 @@
 package handler
 
 import (
-	"io"
 	"log/slog"
 	"net/http"
 
+	"github.com/addon-vendor-digiflazz/internal/atrilinks"
 	"github.com/addon-vendor-digiflazz/internal/httplog"
 	"github.com/addon-vendor-digiflazz/internal/service"
 )
@@ -20,21 +20,27 @@ func NewAtrilinksCallbackHandler(svc *service.TopupService, log *slog.Logger, de
 }
 
 func (h *AtrilinksCallbackHandler) Callback(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost && r.Method != http.MethodGet {
+	switch r.Method {
+	case http.MethodGet, http.MethodPost, http.MethodPut, http.MethodPatch:
+	default:
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	raw, err := io.ReadAll(io.LimitReader(r.Body, 1<<20))
+	if h.dev {
+		h.log.Debug("atrilinks callback hit",
+			"method", r.Method,
+			"content_type", r.Header.Get("Content-Type"),
+			"query", r.URL.RawQuery,
+		)
+	}
+
+	raw, err := atrilinks.ExtractCallbackPayload(r)
 	if err != nil {
-		http.Error(w, "bad body", http.StatusBadRequest)
-		return
-	}
-	if len(raw) == 0 && r.Method == http.MethodGet {
-		raw = []byte(r.URL.Query().Get("payload"))
-	}
-	if len(raw) == 0 {
-		http.Error(w, "empty body", http.StatusBadRequest)
+		if h.dev {
+			h.log.Debug("atrilinks callback parse payload", "err", err.Error())
+		}
+		http.Error(w, "bad request", http.StatusBadRequest)
 		return
 	}
 	if h.dev {
@@ -43,12 +49,13 @@ func (h *AtrilinksCallbackHandler) Callback(w http.ResponseWriter, r *http.Reque
 
 	if err := h.svc.HandleAtrilinksCallback(r.Context(), raw); err != nil {
 		if h.dev {
-			h.log.Debug("atrilinks callback error", "err", err.Error())
+			h.log.Debug("atrilinks callback handle", "err", err.Error())
 		}
 		http.Error(w, "callback failed", http.StatusBadRequest)
 		return
 	}
 
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte("ok"))
 }

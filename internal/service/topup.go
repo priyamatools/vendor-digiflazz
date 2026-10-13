@@ -130,10 +130,9 @@ func (s *TopupService) HandleAtrilinksCallback(ctx context.Context, raw []byte) 
 	if s.shouldNotifyDigiflazz(prevStatus, data.Status) {
 		if err := s.webhook.Send(ctx, data); err != nil {
 			s.log.Error("digiflazz webhook", "ref_id", tx.RefID, "err", err)
-			return err
-		}
-		if err := s.repo.MarkCallbackSent(ctx, tx.RefID); err != nil {
-			return err
+			// Tetap ack ke Atrilinks (200); webhook bisa di-retry terpisah
+		} else if err := s.repo.MarkCallbackSent(ctx, tx.RefID); err != nil {
+			s.log.Error("mark callback sent", "ref_id", tx.RefID, "err", err)
 		}
 	}
 	return nil
