@@ -47,6 +47,19 @@ func TestExtractCallbackPayloadPOSTJSON(t *testing.T) {
 	}
 }
 
+func TestExtractCallbackPayloadGETMsgParam(t *testing.T) {
+	jsonBody := `{"reqid":"dfmkel1q073fox46","status":"success","kode":"axdmmg02","bukti":"261013184555502"}`
+	r := httptest.NewRequest(http.MethodGet, "/cb?msg="+url.QueryEscape(jsonBody), nil)
+	raw, err := ExtractCallbackPayload(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tr, err := ParseTransactionResponse(raw)
+	if err != nil || tr.ReqID != "dfmkel1q073fox46" || tr.Status != "success" {
+		t.Fatalf("%v %+v", err, tr)
+	}
+}
+
 func TestExtractCallbackPayloadGETPayloadParam(t *testing.T) {
 	q := url.QueryEscape(`{"reqid":"4","status":"failed","info":"x"}`)
 	r := httptest.NewRequest(http.MethodGet, "/cb?payload="+q, nil)

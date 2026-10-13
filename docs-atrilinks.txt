@@ -14,6 +14,7 @@ Catatan: response Atrilinks punya field status string (success/pending/failed) d
 Metode: **Query** — GET /h2h/trx/query + pin (+ pass opsional). Tanpa BLAKE3/sign (tidak akses panel).
 Wajib kirim **urlcallback** = URL publik addon (notifikasi status dari Atrilinks → addon).
 Addon wajib expose endpoint HTTP untuk menerima callback; lalu update DB dan webhook ke Digiflazz jika status final.
+Callback Atrilinks (contoh nyata): GET ke urlcallback dengan query `msg` = JSON transaksi (URL-encoded), mis. `?msg={"reqid":"...","status":"success",...}`.
 Keamanan Query: IP whitelist di sisi Atrilinks + PIN/pass di .env + HTTPS; jangan log URL yang memuat pin/pass.
 
 Parameter (semua metode)

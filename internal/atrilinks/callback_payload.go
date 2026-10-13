@@ -36,7 +36,12 @@ func ExtractCallbackPayload(r *http.Request) ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
-		return valuesToJSON(vals)
+		if raw, ok := jsonFromMsgParam(vals); ok {
+			return raw, nil
+		}
+		if hasCallbackFields(vals) {
+			return valuesToJSON(vals)
+		}
 	}
 
 	// Raw JSON without leading brace (unlikely) or single query-style string in body
@@ -54,10 +59,22 @@ func payloadFromQuery(q url.Values) ([]byte, error) {
 	if d := strings.TrimSpace(q.Get("data")); d != "" {
 		return []byte(d), nil
 	}
+	if raw, ok := jsonFromMsgParam(q); ok {
+		return raw, nil
+	}
 	if hasCallbackFields(q) {
 		return valuesToJSON(q)
 	}
 	return nil, fmt.Errorf("callback kosong: tidak ada query/body yang dikenali")
+}
+
+// Atrilinks mengirim GET callback: ?msg=<url-encoded JSON transaksi>
+func jsonFromMsgParam(q url.Values) ([]byte, bool) {
+	m := strings.TrimSpace(q.Get("msg"))
+	if m == "" {
+		return nil, false
+	}
+	return []byte(m), true
 }
 
 func hasCallbackFields(v url.Values) bool {
@@ -83,5 +100,5 @@ func valuesToJSON(v url.Values) ([]byte, error) {
 
 func looksLikeForm(body []byte) bool {
 	s := string(body)
-	return strings.Contains(s, "reqid=") || strings.Contains(s, "status=")
+	return strings.Contains(s, "reqid=") || strings.Contains(s, "status=") || strings.Contains(s, "msg=")
 }
