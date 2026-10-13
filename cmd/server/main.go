@@ -13,12 +13,12 @@ import (
 
 	"github.com/addon-vendor-digiflazz/internal/atrilinks"
 	"github.com/addon-vendor-digiflazz/internal/config"
+	"github.com/addon-vendor-digiflazz/internal/database"
 	"github.com/addon-vendor-digiflazz/internal/digiflazz"
 	"github.com/addon-vendor-digiflazz/internal/handler"
 	"github.com/addon-vendor-digiflazz/internal/migrate"
 	"github.com/addon-vendor-digiflazz/internal/repository"
 	"github.com/addon-vendor-digiflazz/internal/service"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 func main() {
@@ -31,7 +31,7 @@ func main() {
 	}
 
 	ctx := context.Background()
-	pool, err := pgxpool.New(ctx, cfg.DatabaseURL)
+	pool, err := database.ConnectPool(ctx, cfg.DatabaseURL, log)
 	if err != nil {
 		log.Error("database", "err", err)
 		os.Exit(1)
