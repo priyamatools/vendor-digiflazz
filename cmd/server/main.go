@@ -61,7 +61,7 @@ func main() {
 		log,
 		cfg.Development,
 	)
-	webhook := digiflazz.NewWebhookClient(cfg.DigiflazzCallbackURL)
+	webhook := digiflazz.NewWebhookClient(cfg.DigiflazzCallbackURL, log, cfg.Development)
 	svc := service.NewTopupService(cfg, repo, atClient, webhook, log)
 
 	mux := http.NewServeMux()

@@ -1,0 +1,2 @@
+ALTER TABLE transactions
+    ADD COLUMN IF NOT EXISTS response_price TEXT NOT NULL DEFAULT '';

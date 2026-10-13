@@ -9,11 +9,19 @@ import (
 )
 
 func Up(ctx context.Context, pool *pgxpool.Pool, migrationsDir string) error {
-	path := filepath.Join(migrationsDir, "001_transactions.up.sql")
-	sql, err := os.ReadFile(path)
-	if err != nil {
-		return err
+	files := []string{
+		"001_transactions.up.sql",
+		"002_response_price.up.sql",
 	}
-	_, err = pool.Exec(ctx, string(sql))
-	return err
+	for _, name := range files {
+		path := filepath.Join(migrationsDir, name)
+		sql, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		if _, err := pool.Exec(ctx, string(sql)); err != nil {
+			return err
+		}
+	}
+	return nil
 }

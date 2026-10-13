@@ -7,10 +7,10 @@ import (
 	"github.com/addon-vendor-digiflazz/internal/atrilinks"
 )
 
-func MapFromUpstream(up atrilinks.TransactionResponse, refID, hp, pulsaCode string, requestPrice int64) ResponseData {
+func MapFromUpstream(up atrilinks.TransactionResponse, refID, hp, pulsaCode string, fallbackRequestPrice int64) ResponseData {
 	status, rc, msg := mapStatus(up.Status, up.Info)
 
-	price := PriceString(requestPrice)
+	price := PriceString(fallbackRequestPrice)
 	if up.Harga > 0 {
 		price = fmt.Sprintf("%d", up.Harga)
 	}
@@ -78,15 +78,20 @@ func WrongAuthResponse(refID, hp, code string, price int64) ResponseData {
 
 func FromStored(
 	refID, hp, pulsaCode string,
-	price int64,
+	requestPrice int64,
+	responsePrice string,
 	digiflazzStatus, digiflazzRC, message, sn, balance string,
 ) ResponseData {
+	price := responsePrice
+	if price == "" {
+		price = PriceString(requestPrice)
+	}
 	return ResponseData{
 		RefID:   refID,
 		Status:  digiflazzStatus,
 		Code:    pulsaCode,
 		HP:      hp,
-		Price:   PriceString(price),
+		Price:   price,
 		Message: message,
 		Balance: balance,
 		TrID:    refID,

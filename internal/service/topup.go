@@ -63,7 +63,7 @@ func (s *TopupService) HandleTopup(ctx context.Context, req digiflazz.TopupReque
 	if err == nil {
 		if existing.OrderSubmitted {
 			return digiflazz.FromStored(
-				existing.RefID, existing.HP, existing.PulsaCode, existing.Price,
+				existing.RefID, existing.HP, existing.PulsaCode, existing.Price, existing.ResponsePrice,
 				existing.DigiflazzStatus, existing.DigiflazzRC, existing.Message,
 				existing.SN, existing.Balance,
 			), nil
@@ -121,21 +121,8 @@ func (s *TopupService) HandleAtrilinksCallback(ctx context.Context, raw []byte) 
 		return err
 	}
 
-	prevStatus := tx.DigiflazzStatus
-	data, err := s.persistUpstream(ctx, tx.RefID, tx.HP, tx.PulsaCode, tx.Price, raw, up, true)
-	if err != nil {
-		return err
-	}
-
-	if s.shouldNotifyDigiflazz(prevStatus, data.Status) {
-		if err := s.webhook.Send(ctx, data); err != nil {
-			s.log.Error("digiflazz webhook", "ref_id", tx.RefID, "err", err)
-			// Tetap ack ke Atrilinks (200); webhook bisa di-retry terpisah
-		} else if err := s.repo.MarkCallbackSent(ctx, tx.RefID); err != nil {
-			s.log.Error("mark callback sent", "ref_id", tx.RefID, "err", err)
-		}
-	}
-	return nil
+	_, err = s.persistUpstream(ctx, tx.RefID, tx.HP, tx.PulsaCode, tx.Price, raw, up, true)
+	return err
 }
 
 func (s *TopupService) persistUpstream(
@@ -146,6 +133,7 @@ func (s *TopupService) persistUpstream(
 	up atrilinks.TransactionResponse,
 	orderSubmitted bool,
 ) (digiflazz.ResponseData, error) {
+	up = s.enrichUpstreamHarga(ctx, refID, up, raw)
 	data := digiflazz.MapFromUpstream(up, refID, hp, pulsaCode, price)
 
 	var rawJSON json.RawMessage
@@ -161,6 +149,7 @@ func (s *TopupService) persistUpstream(
 		Message:         data.Message,
 		SN:              data.SN,
 		Balance:         data.Balance,
+		ResponsePrice:   data.Price,
 		UpstreamRaw:     rawJSON,
 		OrderSubmitted:  orderSubmitted,
 	})
@@ -185,9 +174,20 @@ func (s *TopupService) persistUpstream(
 	return data, nil
 }
 
-func (s *TopupService) shouldNotifyDigiflazz(prev, next string) bool {
-	if next != "1" && next != "2" {
-		return false
+func (s *TopupService) enrichUpstreamHarga(ctx context.Context, refID string, up atrilinks.TransactionResponse, raw []byte) atrilinks.TransactionResponse {
+	if up.Harga > 0 {
+		return up
 	}
-	return prev == "0"
+	if h := atrilinks.HargaFromRaw(raw); h > 0 {
+		up.Harga = h
+		return up
+	}
+	tx, err := s.repo.GetByRefID(ctx, refID)
+	if err != nil {
+		return up
+	}
+	if h := atrilinks.HargaFromRaw(tx.UpstreamRaw); h > 0 {
+		up.Harga = h
+	}
+	return up
 }

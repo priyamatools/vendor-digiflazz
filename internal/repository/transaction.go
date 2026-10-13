@@ -18,6 +18,7 @@ type Transaction struct {
 	HP               string
 	PulsaCode        string
 	Price            int64
+	ResponsePrice    string
 	DigiflazzUsername string
 	DigiflazzStatus  string
 	DigiflazzRC      string
@@ -41,7 +42,7 @@ func New(pool *pgxpool.Pool) *Repository {
 
 func (r *Repository) GetByRefID(ctx context.Context, refID string) (Transaction, error) {
 	const q = `
-SELECT id, ref_id, hp, pulsa_code, price, digiflazz_username,
+SELECT id, ref_id, hp, pulsa_code, price, response_price, digiflazz_username,
        digiflazz_status, digiflazz_rc, message, sn, tr_id, balance,
        atrilinks_status, upstream_raw, order_submitted, callback_sent_at
 FROM transactions WHERE ref_id = $1`
@@ -69,6 +70,7 @@ type UpstreamUpdate struct {
 	Message         string
 	SN              string
 	Balance         string
+	ResponsePrice   string
 	UpstreamRaw     json.RawMessage
 	OrderSubmitted  bool
 }
@@ -82,13 +84,14 @@ UPDATE transactions SET
   message = $5,
   sn = $6,
   balance = $7,
-  upstream_raw = $8,
-  order_submitted = $9,
+  response_price = $8,
+  upstream_raw = $9,
+  order_submitted = $10,
   updated_at = NOW()
 WHERE ref_id = $1`
 	_, err := r.pool.Exec(ctx, q,
 		u.RefID, u.AtrilinksStatus, u.DigiflazzStatus, u.DigiflazzRC,
-		u.Message, u.SN, u.Balance, u.UpstreamRaw, u.OrderSubmitted,
+		u.Message, u.SN, u.Balance, u.ResponsePrice, u.UpstreamRaw, u.OrderSubmitted,
 	)
 	return err
 }
@@ -102,7 +105,7 @@ func (r *Repository) MarkCallbackSent(ctx context.Context, refID string) error {
 func scanTx(row pgx.Row) (Transaction, error) {
 	var t Transaction
 	err := row.Scan(
-		&t.ID, &t.RefID, &t.HP, &t.PulsaCode, &t.Price, &t.DigiflazzUsername,
+		&t.ID, &t.RefID, &t.HP, &t.PulsaCode, &t.Price, &t.ResponsePrice, &t.DigiflazzUsername,
 		&t.DigiflazzStatus, &t.DigiflazzRC, &t.Message, &t.SN, &t.TrID, &t.Balance,
 		&t.AtrilinksStatus, &t.UpstreamRaw, &t.OrderSubmitted, &t.CallbackSentAt,
 	)
