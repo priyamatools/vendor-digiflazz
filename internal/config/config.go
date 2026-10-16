@@ -9,6 +9,7 @@ import (
 	"github.com/joho/godotenv"
 )
 
+// Config menyimpan semua pengaturan aplikasi dari environment.
 type Config struct {
 	HTTPPort int
 	Development bool
@@ -26,6 +27,7 @@ type Config struct {
 	AddonAtrilinksCallbackURL string
 }
 
+// Load membaca .env dan memvalidasi variabel wajib.
 func Load() (Config, error) {
 	_ = godotenv.Load()
 
@@ -62,8 +64,9 @@ func Load() (Config, error) {
 		return Config{}, fmt.Errorf("DIGIFLAZZ_CALLBACK_URL wajib diisi")
 	}
 	if cfg.AtrilinksUserID == "" || cfg.AtrilinksPIN == "" {
-		return Config{}, fmt.Errorf("ATRILINKS_USER_ID dan ATRILINKS_PIN wajib diisi")
+		return Config{}, fmt.Errorf("ATRILINKS_USER_ID dan ATRILINKS_PIN wajib diisi (untuk BLAKE3 sign)")
 	}
+	// Password boleh kosong jika akun tidak memakai pass; tetap masuk ke string combined.
 	if cfg.AddonAtrilinksCallbackURL == "" {
 		return Config{}, fmt.Errorf("ADDON_ATRILINKS_CALLBACK_URL wajib diisi")
 	}
@@ -71,6 +74,7 @@ func Load() (Config, error) {
 	return cfg, nil
 }
 
+// envOr mengambil nilai env atau default jika kosong.
 func envOr(key, def string) string {
 	if v := os.Getenv(key); v != "" {
 		return v
@@ -78,6 +82,7 @@ func envOr(key, def string) string {
 	return def
 }
 
+// isDevelopment true jika mode debug/logging pengembangan aktif.
 func isDevelopment() bool {
 	switch strings.ToLower(strings.TrimSpace(os.Getenv("APP_ENV"))) {
 	case "development", "dev", "local":

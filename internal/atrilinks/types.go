@@ -21,6 +21,7 @@ type TransactionResponse struct {
 	UserID string `json:"userid"`
 }
 
+// ParseTransactionResponse mem-parse satu baris JSON response/callback Atrilinks.
 func ParseTransactionResponse(raw []byte) (TransactionResponse, error) {
 	raw = bytesTrim(raw)
 	if len(raw) == 0 {
@@ -55,10 +56,12 @@ func ParseTransactionResponse(raw []byte) (TransactionResponse, error) {
 	return tr, nil
 }
 
+// bytesTrim memangkas spasi di awal/akhir byte JSON mentah.
 func bytesTrim(b []byte) []byte {
 	return []byte(strings.TrimSpace(string(b)))
 }
 
+// flexString membaca field string dari JSON yang bisa berupa string atau angka.
 func flexString(m map[string]json.RawMessage, key string) string {
 	raw, ok := m[key]
 	if !ok {
@@ -71,6 +74,7 @@ func flexString(m map[string]json.RawMessage, key string) string {
 	return strings.Trim(string(raw), `"`)
 }
 
+// flexInt64 membaca field numerik dari JSON string atau number.
 func flexInt64(m map[string]json.RawMessage, key string) (int64, error) {
 	raw, ok := m[key]
 	if !ok {
@@ -87,6 +91,7 @@ func flexInt64(m map[string]json.RawMessage, key string) (int64, error) {
 	return strconv.ParseInt(strings.TrimSpace(s), 10, 64)
 }
 
+// IsFinalStatus true jika status upstream sudah sukses atau gagal.
 func IsFinalStatus(status string) bool {
 	switch status {
 	case "success", "failed":

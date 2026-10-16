@@ -2,7 +2,7 @@ package atrilinks
 
 import "encoding/json"
 
-// HargaFromRaw reads harga from upstream JSON when struct parse left it zero.
+// HargaFromRaw mengambil field harga dari JSON mentah upstream.
 func HargaFromRaw(raw []byte) int64 {
 	if len(raw) == 0 {
 		return 0

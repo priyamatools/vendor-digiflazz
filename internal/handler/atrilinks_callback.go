@@ -9,16 +9,19 @@ import (
 	"github.com/addon-vendor-digiflazz/internal/service"
 )
 
+// AtrilinksCallbackHandler menangani urlcallback dari Atrilinks (GET/POST).
 type AtrilinksCallbackHandler struct {
 	svc *service.TopupService
 	log *slog.Logger
 	dev bool
 }
 
+// NewAtrilinksCallbackHandler membuat handler callback upstream.
 func NewAtrilinksCallbackHandler(svc *service.TopupService, log *slog.Logger, development bool) *AtrilinksCallbackHandler {
 	return &AtrilinksCallbackHandler{svc: svc, log: log, dev: development}
 }
 
+// Callback mem-parse payload (termasuk query msg) dan memperbarui transaksi.
 func (h *AtrilinksCallbackHandler) Callback(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet, http.MethodPost, http.MethodPut, http.MethodPatch:

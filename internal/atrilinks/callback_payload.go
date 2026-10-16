@@ -10,7 +10,7 @@ import (
 	"strings"
 )
 
-// ExtractCallbackPayload reads Atrilinks callback from GET query, POST JSON, or form body.
+// ExtractCallbackPayload membaca body callback Atrilinks (GET msg, POST JSON, form).
 func ExtractCallbackPayload(r *http.Request) ([]byte, error) {
 	if r.Method == http.MethodGet {
 		return payloadFromQuery(r.URL.Query())
@@ -52,6 +52,7 @@ func ExtractCallbackPayload(r *http.Request) ([]byte, error) {
 	return body, nil
 }
 
+// payloadFromQuery mengekstrak JSON callback dari query string (msg, payload, data, atau field transaksi).
 func payloadFromQuery(q url.Values) ([]byte, error) {
 	if p := strings.TrimSpace(q.Get("payload")); p != "" {
 		return []byte(p), nil
@@ -68,7 +69,7 @@ func payloadFromQuery(q url.Values) ([]byte, error) {
 	return nil, fmt.Errorf("callback kosong: tidak ada query/body yang dikenali")
 }
 
-// Atrilinks mengirim GET callback: ?msg=<url-encoded JSON transaksi>
+// jsonFromMsgParam membaca parameter msg (GET callback: ?msg=<JSON URL-encoded>).
 func jsonFromMsgParam(q url.Values) ([]byte, bool) {
 	m := strings.TrimSpace(q.Get("msg"))
 	if m == "" {
@@ -77,6 +78,7 @@ func jsonFromMsgParam(q url.Values) ([]byte, bool) {
 	return []byte(m), true
 }
 
+// hasCallbackFields mengecek apakah query berisi field khas notifikasi transaksi.
 func hasCallbackFields(v url.Values) bool {
 	if strings.TrimSpace(v.Get("reqid")) != "" {
 		return true
@@ -87,6 +89,7 @@ func hasCallbackFields(v url.Values) bool {
 	return false
 }
 
+// valuesToJSON mengubah form/query menjadi objek JSON untuk di-parse seperti response transaksi.
 func valuesToJSON(v url.Values) ([]byte, error) {
 	m := make(map[string]string, len(v))
 	for key, vals := range v {
@@ -98,6 +101,7 @@ func valuesToJSON(v url.Values) ([]byte, error) {
 	return json.Marshal(m)
 }
 
+// looksLikeForm mendeteksi body berformat application/x-www-form-urlencoded.
 func looksLikeForm(body []byte) bool {
 	s := string(body)
 	return strings.Contains(s, "reqid=") || strings.Contains(s, "status=") || strings.Contains(s, "msg=")

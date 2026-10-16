@@ -13,6 +13,7 @@ import (
 	"github.com/addon-vendor-digiflazz/internal/repository"
 )
 
+// TopupService mengorkestrasi topup Digiflazz, order Atrilinks, dan webhook.
 type TopupService struct {
 	cfg      config.Config
 	repo     *repository.Repository
@@ -21,6 +22,7 @@ type TopupService struct {
 	log      *slog.Logger
 }
 
+// NewTopupService membuat service dengan dependensi yang diinjeksikan.
 func NewTopupService(
 	cfg config.Config,
 	repo *repository.Repository,
@@ -37,6 +39,7 @@ func NewTopupService(
 	}
 }
 
+// HandleTopup memproses request topup/cek status dari Digiflazz.
 func (s *TopupService) HandleTopup(ctx context.Context, req digiflazz.TopupRequest) (digiflazz.ResponseData, error) {
 	if req.Username != s.cfg.DigiflazzUsername {
 		return digiflazz.WrongAuthResponse(req.RefID, req.HP, req.PulsaCode, req.Price), nil
@@ -104,6 +107,7 @@ func (s *TopupService) HandleTopup(ctx context.Context, req digiflazz.TopupReque
 	return s.persistUpstream(ctx, req.RefID, req.HP, kodeProduk, req.Price, raw, up, true)
 }
 
+// HandleAtrilinksCallback memproses notifikasi urlcallback dari Atrilinks.
 func (s *TopupService) HandleAtrilinksCallback(ctx context.Context, raw []byte) error {
 	up, err := atrilinks.ParseTransactionResponse(raw)
 	if err != nil {
@@ -125,6 +129,7 @@ func (s *TopupService) HandleAtrilinksCallback(ctx context.Context, raw []byte) 
 	return err
 }
 
+// persistUpstream menyimpan hasil upstream, memetakan ke Digiflazz, dan mengirim webhook jika final.
 func (s *TopupService) persistUpstream(
 	ctx context.Context,
 	refID, hp, pulsaCode string,
@@ -174,6 +179,7 @@ func (s *TopupService) persistUpstream(
 	return data, nil
 }
 
+// enrichUpstreamHarga melengkapi harga dari callback bila field harga tidak ada di payload.
 func (s *TopupService) enrichUpstreamHarga(ctx context.Context, refID string, up atrilinks.TransactionResponse, raw []byte) atrilinks.TransactionResponse {
 	if up.Harga > 0 {
 		return up

@@ -10,6 +10,7 @@ import (
 	"time"
 )
 
+// WebhookClient mengirim HTTP POST callback ke Digiflazz.
 type WebhookClient struct {
 	url    string
 	client *http.Client
@@ -17,6 +18,7 @@ type WebhookClient struct {
 	dev    bool
 }
 
+// NewWebhookClient membuat klien webhook dengan URL dari env.
 func NewWebhookClient(url string, log *slog.Logger, development bool) *WebhookClient {
 	return &WebhookClient{
 		url: url,
@@ -28,6 +30,7 @@ func NewWebhookClient(url string, log *slog.Logger, development bool) *WebhookCl
 	}
 }
 
+// Send mengirim payload { "data": { ... } } ke DIGIFLAZZ_CALLBACK_URL.
 func (w *WebhookClient) Send(ctx context.Context, data ResponseData) error {
 	env := Envelope{Data: data}
 	body, err := json.Marshal(env)

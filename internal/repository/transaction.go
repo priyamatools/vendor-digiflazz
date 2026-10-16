@@ -36,10 +36,12 @@ type Repository struct {
 	pool *pgxpool.Pool
 }
 
+// New membuat repository PostgreSQL.
 func New(pool *pgxpool.Pool) *Repository {
 	return &Repository{pool: pool}
 }
 
+// GetByRefID mengambil transaksi berdasarkan ref_id Digiflazz.
 func (r *Repository) GetByRefID(ctx context.Context, refID string) (Transaction, error) {
 	const q = `
 SELECT id, ref_id, hp, pulsa_code, price, response_price, digiflazz_username,
@@ -50,6 +52,7 @@ FROM transactions WHERE ref_id = $1`
 	return scanTx(row)
 }
 
+// CreatePending menyimpan transaksi baru dengan status pending Digiflazz.
 func (r *Repository) CreatePending(ctx context.Context, tx Transaction) error {
 	const q = `
 INSERT INTO transactions (
@@ -75,6 +78,7 @@ type UpstreamUpdate struct {
 	OrderSubmitted  bool
 }
 
+// ApplyUpstream memperbarui status hasil upstream dan field response Digiflazz.
 func (r *Repository) ApplyUpstream(ctx context.Context, u UpstreamUpdate) error {
 	const q = `
 UPDATE transactions SET
@@ -96,12 +100,14 @@ WHERE ref_id = $1`
 	return err
 }
 
+// MarkCallbackSent mencatat waktu webhook Digiflazz berhasil dikirim.
 func (r *Repository) MarkCallbackSent(ctx context.Context, refID string) error {
 	const q = `UPDATE transactions SET callback_sent_at = NOW(), updated_at = NOW() WHERE ref_id = $1`
 	_, err := r.pool.Exec(ctx, q, refID)
 	return err
 }
 
+// scanTx memetakan satu baris query ke struct Transaction.
 func scanTx(row pgx.Row) (Transaction, error) {
 	var t Transaction
 	err := row.Scan(

@@ -10,16 +10,19 @@ import (
 	"github.com/addon-vendor-digiflazz/internal/service"
 )
 
+// DigiflazzHandler menangani HTTP request dari Digiflazz Seller API.
 type DigiflazzHandler struct {
 	svc *service.TopupService
 	log *slog.Logger
 	dev bool
 }
 
+// NewDigiflazzHandler membuat handler topup Digiflazz.
 func NewDigiflazzHandler(svc *service.TopupService, log *slog.Logger, development bool) *DigiflazzHandler {
 	return &DigiflazzHandler{svc: svc, log: log, dev: development}
 }
 
+// Topup endpoint POST /api/digiflazz/topup — response dibungkus { "data": ... }.
 func (h *DigiflazzHandler) Topup(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)

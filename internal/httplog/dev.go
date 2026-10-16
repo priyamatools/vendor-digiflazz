@@ -5,7 +5,7 @@ import (
 	"net/url"
 )
 
-// RedactAtrilinksURL masks pin/pass in query string for logs.
+// RedactAtrilinksURL menyamarkan pin, pass, dan sign pada URL untuk log.
 func RedactAtrilinksURL(rawURL string) string {
 	u, err := url.Parse(rawURL)
 	if err != nil {
@@ -18,10 +18,14 @@ func RedactAtrilinksURL(rawURL string) string {
 	if q.Has("pass") {
 		q.Set("pass", "***")
 	}
+	if q.Has("sign") {
+		q.Set("sign", "***")
+	}
 	u.RawQuery = q.Encode()
 	return u.String()
 }
 
+// DigiflazzRequest mencatat request masuk Digiflazz (mode development).
 func DigiflazzRequest(log *slog.Logger, username, commands, refID, hp, pulsaCode string, price int64, sign string) {
 	log.Debug("digiflazz request",
 		"username", username,
@@ -34,6 +38,7 @@ func DigiflazzRequest(log *slog.Logger, username, commands, refID, hp, pulsaCode
 	)
 }
 
+// DigiflazzResponse mencatat field response ke Digiflazz (mode development).
 func DigiflazzResponse(log *slog.Logger, refID, status, rc, code, hp, price, message, balance, trID, sn string) {
 	log.Debug("digiflazz response",
 		"ref_id", refID,
@@ -49,6 +54,7 @@ func DigiflazzResponse(log *slog.Logger, refID, status, rc, code, hp, price, mes
 	)
 }
 
+// AtrilinksOrder mencatat request order ke Atrilinks (URL sudah disamarkan).
 func AtrilinksOrder(log *slog.Logger, endpoint, safeURL, reqid, kodeproduk, tujuan string, jenistrx int, limitharga int64) {
 	log.Debug("atrilinks request",
 		"endpoint", endpoint,
@@ -61,6 +67,7 @@ func AtrilinksOrder(log *slog.Logger, endpoint, safeURL, reqid, kodeproduk, tuju
 	)
 }
 
+// AtrilinksResponse mencatat response HTTP dari Atrilinks.
 func AtrilinksResponse(log *slog.Logger, refID string, httpStatus int, raw []byte, parsed map[string]string, err error) {
 	if err != nil {
 		log.Debug("atrilinks response error",
@@ -82,12 +89,14 @@ func AtrilinksResponse(log *slog.Logger, refID string, httpStatus int, raw []byt
 	log.Debug("atrilinks response", args...)
 }
 
+// AtrilinksCallback mencatat body callback dari Atrilinks.
 func AtrilinksCallback(log *slog.Logger, body []byte) {
 	log.Debug("atrilinks callback",
 		"body", truncate(string(body), 4096),
 	)
 }
 
+// truncate memotong string log yang terlalu panjang.
 func truncate(s string, max int) string {
 	if len(s) <= max {
 		return s

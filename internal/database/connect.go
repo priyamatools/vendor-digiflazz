@@ -14,7 +14,7 @@ const (
 	defaultRetryDelay    = 2 * time.Second
 )
 
-// ConnectPool waits until PostgreSQL accepts connections (startup / compose restart).
+// ConnectPool menunggu PostgreSQL siap (retry saat startup / docker restart).
 func ConnectPool(ctx context.Context, databaseURL string, log *slog.Logger) (*pgxpool.Pool, error) {
 	var lastErr error
 	for attempt := 1; attempt <= defaultMaxAttempts; attempt++ {
@@ -44,6 +44,7 @@ func ConnectPool(ctx context.Context, databaseURL string, log *slog.Logger) (*pg
 	return nil, fmt.Errorf("database unavailable after %d attempts: %w", defaultMaxAttempts, lastErr)
 }
 
+// sleepCtx menunggu durasi atau dibatalkan oleh context.
 func sleepCtx(ctx context.Context, d time.Duration) bool {
 	t := time.NewTimer(d)
 	defer t.Stop()

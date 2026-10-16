@@ -11,11 +11,14 @@ Metode Atrilinks direkomendasikan. Metode Query & JSON hanya mengandalkan IP whi
 Catatan: response Atrilinks punya field status string (success/pending/failed) dan info — TIDAK ada rc atau status 0/1/2 Digiflazz. Mapping ke rc/status Digiflazz dilakukan di addon.
 
 === Addon vendor Digiflazz (proyek ini) ===
-Metode: **Query** — GET /h2h/trx/query + pin (+ pass opsional). Tanpa BLAKE3/sign (tidak akses panel).
-Wajib kirim **urlcallback** = URL publik addon (notifikasi status dari Atrilinks → addon).
-Addon wajib expose endpoint HTTP untuk menerima callback; lalu update DB dan webhook ke Digiflazz jika status final.
-Callback Atrilinks (contoh nyata): GET ke urlcallback dengan query `msg` = JSON transaksi (URL-encoded), mis. `?msg={"reqid":"...","status":"success",...}`.
-Keamanan Query: IP whitelist di sisi Atrilinks + PIN/pass di .env + HTTPS; jangan log URL yang memuat pin/pass.
+Metode: **Atrilinks (BLAKE3)** — GET /h2h/trx/atrilinks + sign + urlcallback (disarankan dokumentasi terbaru).
+Bahan tanda tangan:
+  combined = reqid|kodeproduk|tujuan:userid:password:pin:Atrilinks
+  sign     = blake3_256(combined) hex lowercase 64 karakter
+Kredensial: ATRILINKS_USER_ID, ATRILINKS_PASS (password), ATRILINKS_PIN di .env — tidak dikirim di query, hanya dipakai menghitung sign.
+Wajib **urlcallback** = URL publik addon.
+Callback: GET `?msg=` JSON URL-encoded (lihat contoh di bawah).
+Jangan log URL lengkap (berisi sign) atau nilai password/pin.
 
 Parameter (semua metode)
 Param	Wajib	Keterangan

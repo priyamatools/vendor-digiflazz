@@ -21,6 +21,7 @@ import (
 	"github.com/addon-vendor-digiflazz/internal/service"
 )
 
+// main memuat konfigurasi, migrasi DB, dan menjalankan server HTTP.
 func main() {
 	cfg, err := config.Load()
 	if err != nil {
@@ -55,8 +56,8 @@ func main() {
 	atClient := atrilinks.NewClient(
 		cfg.AtrilinksBaseURL,
 		cfg.AtrilinksUserID,
-		cfg.AtrilinksPIN,
 		cfg.AtrilinksPass,
+		cfg.AtrilinksPIN,
 		cfg.AddonAtrilinksCallbackURL,
 		log,
 		cfg.Development,
@@ -98,6 +99,7 @@ func main() {
 	_ = srv.Shutdown(shutdownCtx)
 }
 
+// projectRoot menemukan direktori yang berisi folder migrations.
 func projectRoot() string {
 	if wd, err := os.Getwd(); err == nil {
 		if _, err := os.Stat(filepath.Join(wd, "migrations")); err == nil {

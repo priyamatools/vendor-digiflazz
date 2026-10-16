@@ -8,6 +8,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// Up menjalankan file migrasi SQL berurutan di folder migrations.
 func Up(ctx context.Context, pool *pgxpool.Pool, migrationsDir string) error {
 	files := []string{
 		"001_transactions.up.sql",

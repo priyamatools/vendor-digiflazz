@@ -7,6 +7,7 @@ import (
 	"github.com/addon-vendor-digiflazz/internal/atrilinks"
 )
 
+// MapFromUpstream mengubah response Atrilinks menjadi field response Digiflazz.
 func MapFromUpstream(up atrilinks.TransactionResponse, refID, hp, pulsaCode string, fallbackRequestPrice int64) ResponseData {
 	status, rc, msg := mapStatus(up.Status, up.Info)
 
@@ -37,6 +38,7 @@ func MapFromUpstream(up atrilinks.TransactionResponse, refID, hp, pulsaCode stri
 	}
 }
 
+// mapStatus menentukan status, rc, dan message format Digiflazz dari status kata Atrilinks.
 func mapStatus(atrilinksStatus, info string) (status, rc, message string) {
 	s := strings.ToLower(strings.TrimSpace(atrilinksStatus))
 	switch s {
@@ -61,6 +63,7 @@ func mapStatus(atrilinksStatus, info string) (status, rc, message string) {
 	}
 }
 
+// WrongAuthResponse response standar gagal autentikasi Digiflazz (rc 204).
 func WrongAuthResponse(refID, hp, code string, price int64) ResponseData {
 	return ResponseData{
 		RefID:   refID,
@@ -76,6 +79,7 @@ func WrongAuthResponse(refID, hp, code string, price int64) ResponseData {
 	}
 }
 
+// FromStored membangun response Digiflazz dari data yang tersimpan di database.
 func FromStored(
 	refID, hp, pulsaCode string,
 	requestPrice int64,

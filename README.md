@@ -6,16 +6,29 @@ Addon **Seller API** untuk [Digiflazz](https://developer.digiflazz.com/api/selle
 
 - **Topup & cek status** — idempoten berdasarkan `ref_id` (topup ulang dengan `ref_id` sama mengembalikan state dari database, tanpa order ulang ke Atrilinks).
 - **Validasi Digiflazz** — verifikasi `sign` = `md5(username + apiKey + ref_id)` dan `username` dari environment.
-- **Integrasi Atrilinks (Query/PIN)** — transaksi prabayar fixed (`jenistrx=1`) via `GET /h2h/trx/query`, dengan `urlcallback` ke addon.
-- **Callback Atrilinks** — update status transaksi dari notifikasi upstream; webhook ke Digiflazz saat status final (sukses/gagal).
-- **Mapping status** — Atrilinks (`success` / `pending` / `failed`) → Digiflazz (`status` `0`/`1`/`2` + `rc`); RC dan status numerik hanya format Digiflazz, bukan dari upstream.
+- **Integrasi Atrilinks (metode Atrilinks + BLAKE3)** — transaksi prabayar fixed (`jenistrx=1`) via `GET /h2h/trx/atrilinks`, dengan `sign` dan `urlcallback`.
+- **Callback Atrilinks** — update status dari notifikasi upstream (`msg` / JSON); webhook ke Digiflazz saat status final.
+- **Mapping status** — Atrilinks (`success` / `pending` / `failed`) → Digiflazz (`status` `0`/`1`/`2` + `rc`).
 - **PostgreSQL** — persistensi transaksi, audit response upstream (JSON), pelacakan webhook.
+
+## Tanda tangan Atrilinks (upstream)
+
+Metode yang dipakai addon (disarankan dokumentasi Atrilinks):
+
+```text
+combined = reqid|kodeproduk|tujuan:userid:password:pin:Atrilinks
+sign     = blake3_256(combined)   → hex lowercase, 64 karakter
+```
+
+- `password` = `ATRILINKS_PASS`, `pin` = `ATRILINKS_PIN`, `userid` = `ATRILINKS_USER_ID`
+- `:Atrilinks` di akhir string adalah salt tetap
+- Implementasi: `internal/atrilinks/sign.go`
 
 ## Alur singkat
 
 ```text
 Digiflazz  →  POST topup (addon)
-Addon      →  validasi sign → DB (ref_id) → Atrilinks query (+ urlcallback)
+Addon      →  validasi sign → DB (ref_id) → Atrilinks /h2h/trx/atrilinks (+ sign, urlcallback)
 Atrilinks  →  callback status → addon → update DB
 Addon      →  webhook Digiflazz (jika sukses/gagal)
 Digiflazz  ←  response { "data": { ... } }
@@ -26,83 +39,76 @@ Digiflazz  ←  response { "data": { ... } }
 | Method | Path | Keterangan |
 |--------|------|------------|
 | `POST` | `/api/digiflazz/topup` | Request dari Digiflazz (JSON) |
-| `POST` | `/h2h/atrilinks/callback` | `urlcallback` dari Atrilinks (sesuaikan dengan `ADDON_ATRILINKS_CALLBACK_URL`) |
+| `GET` / `POST` | `/h2h/atrilinks/callback` | `urlcallback` dari Atrilinks |
 | `GET` | `/health` | Health check |
 
-Response ke Digiflazz selalu dibungkus `{ "data": { ... } }`.
+Response ke Digiflazz selalu dibungkus `{ "data": { ... } }`. Webhook ke Digiflazz memakai format yang sama.
 
 ## Dokumentasi
 
 | Sumber | Isi |
 |--------|-----|
 | [Digiflazz — Topup / Cek Status](https://developer.digiflazz.com/api/seller/prabayar/topup/) | Request, signature, field response |
-| [Digiflazz — Status](https://developer.digiflazz.com/api/seller/prabayar/status/) | `0` pending, `1` sukses, `2` gagal |
-| [Digiflazz — Response Code](https://developer.digiflazz.com/api/seller/prabayar/response-code/) | `rc` (`00`, `39`, `07`, `204`, …) |
-| [Digiflazz — Webhooks](https://developer.digiflazz.com/api/seller/prabayar/webhook/) | Callback ke Digiflazz saat status berubah |
+| [Digiflazz — Webhooks](https://developer.digiflazz.com/api/seller/prabayar/webhook/) | Callback ke Digiflazz |
 | [Atrilinks H2H](https://h2h.atrilinks.com/docs) | Docs resmi upstream |
-| [`docs-atrilinks.txt`](./docs-atrilinks.txt) | Rangkuman API Atrilinks di repo (Query, parameter, contoh response) |
-
-Konvensi implementasi dan mapping detail juga ada di `.cursor/rules/digiflazz-vendor-atrilinks.mdc` (untuk pengembangan dengan Cursor).
+| [`docs-atrilinks.txt`](./docs-atrilinks.txt) | Rangkuman lokal (BLAKE3, callback `msg`, dll.) |
 
 ## Konfigurasi
 
-Salin [`.env.example`](./.env.example) ke `.env`. Variabel utama:
+Salin [`.env.example`](./.env.example) ke `.env`.
 
-- **Server:** `HTTP_PORT`, `DATABASE_URL`, `APP_ENV` (`development` / `DEV_MODE=true` / `LOG_LEVEL=debug` untuk log request Digiflazz & response Atrilinks)
-- **Digiflazz:** `DIGIFLAZZ_API_USERNAME`, `DIGIFLAZZ_API_KEY`, `DIGIFLAZZ_CALLBACK_URL`
-- **Atrilinks:** `ATRILINKS_BASE_URL`, `ATRILINKS_USER_ID`, `ATRILINKS_PIN`, `ATRILINKS_PASS` (opsional), `ADDON_ATRILINKS_CALLBACK_URL`
+| Variabel | Keterangan |
+|----------|------------|
+| `HTTP_PORT`, `DATABASE_URL` | Server & PostgreSQL |
+| `APP_ENV=development` | Log debug request/response |
+| `DIGIFLAZZ_API_USERNAME`, `DIGIFLAZZ_API_KEY`, `DIGIFLAZZ_CALLBACK_URL` | Seller Digiflazz |
+| `ATRILINKS_BASE_URL` | Default `http://api.atrilinks.com` |
+| `ATRILINKS_USER_ID` | `userid` member |
+| `ATRILINKS_PASS` | Password untuk bahan `combined` sign |
+| `ATRILINKS_PIN` | PIN untuk bahan `combined` sign |
+| `ADDON_ATRILINKS_CALLBACK_URL` | URL publik callback (path `/h2h/atrilinks/callback`) |
 
-Jangan commit file `.env`. Rahasia hanya di environment runtime.
+Jangan commit `.env`. Jangan log `sign`, `pin`, atau `password`.
 
-**Mapping produk:** `pulsa_code` Digiflazz saat ini dipakai sebagai `kodeproduk` Atrilinks (huruf kecil). Tabel mapping terpisah dapat ditambahkan jika diperlukan.
+**Mapping produk:** `pulsa_code` Digiflazz → `kodeproduk` Atrilinks (lowercase).
 
 ## Tech stack
 
-- Go 1.22+
+- Go 1.22+ (BLAKE3: `github.com/zeebo/blake3`)
 - PostgreSQL 16
-- Docker / Docker Compose (deploy opsional)
+- Docker / Docker Compose (opsional)
 
 ## Struktur proyek
 
 ```text
-cmd/server/           # entrypoint HTTP
-internal/config/      # env
-internal/handler/     # Digiflazz + callback Atrilinks
-internal/service/     # orkestrasi transaksi
-internal/digiflazz/   # sign, mapper, webhook client
-internal/atrilinks/   # client H2H
-internal/repository/  # PostgreSQL
-internal/database/    # koneksi DB (retry startup)
-migrations/           # skema SQL
+cmd/server/
+internal/atrilinks/   # sign BLAKE3, client H2H, callback payload
+internal/digiflazz/   # sign MD5 Digiflazz, mapper, webhook
+internal/handler/
+internal/service/
+internal/repository/
+migrations/
 ```
 
 ## Menjalankan
 
-**Docker Compose (disarankan):**
-
 ```bash
 cp .env.example .env
-# isi kredensial
 docker compose up -d
 ```
 
-**Lokal (Go):** Postgres harus reachable dari `DATABASE_URL`; lihat komentar di `.env.example` dan `docker-compose.yml`.
-
-**CI**
+## CI / Release
 
 | Workflow | Trigger | Hasil |
 |----------|---------|--------|
-| `release.yml` | Push tag `v*` (mis. `v1.0.0`) | Binary Linux / Windows / macOS (amd64 & arm64) + `migrations/`, di [GitHub Releases](https://docs.github.com/en/repositories/releasing-projects-on-github/managing-releases-in-a-repository) |
-| `docker-hub.yml` | Push `main` / tag `v*` | Image Docker Hub |
+| `release.yml` | Tag `v*` | Binary multi-OS + `migrations/` |
+| `docker-hub.yml` | `main` / tag `v*` | Image Docker Hub |
 
 ```bash
-git tag v1.0.0
-git push origin v1.0.0
+git tag v1.0.0 && git push origin v1.0.0
 ```
 
-Artefak: `vendor-digiflazz-v1.0.0-linux-amd64.tar.gz`, `...-windows-amd64.zip`, `...-darwin-arm64.tar.gz`, dll. (berisi binary + folder `migrations`).
-
-Docker Hub: secrets `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN`.
+Docker Hub: `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN`.
 
 ## Lisensi
 
