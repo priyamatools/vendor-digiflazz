@@ -28,8 +28,10 @@ type Transaction struct {
 	Balance          string
 	AtrilinksStatus  *string
 	UpstreamRaw      json.RawMessage
-	OrderSubmitted   bool
-	CallbackSentAt   *time.Time
+	OrderSubmitted      bool
+	CallbackSentAt      *time.Time
+	CreatedAt           time.Time
+	LastStatusCheckAt   *time.Time
 }
 
 type Repository struct {
@@ -46,7 +48,8 @@ func (r *Repository) GetByRefID(ctx context.Context, refID string) (Transaction,
 	const q = `
 SELECT id, ref_id, hp, pulsa_code, price, response_price, digiflazz_username,
        digiflazz_status, digiflazz_rc, message, sn, tr_id, balance,
-       atrilinks_status, upstream_raw, order_submitted, callback_sent_at
+       atrilinks_status, upstream_raw, order_submitted, callback_sent_at,
+       created_at, last_status_check_at
 FROM transactions WHERE ref_id = $1`
 	row := r.pool.QueryRow(ctx, q, refID)
 	return scanTx(row)
@@ -107,6 +110,75 @@ func (r *Repository) MarkCallbackSent(ctx context.Context, refID string) error {
 	return err
 }
 
+// AcquireStatusCheck mengunci slot poll checktoday per ref_id (throttle antar request/worker).
+func (r *Repository) AcquireStatusCheck(ctx context.Context, refID string, minInterval time.Duration) (bool, error) {
+	sec := int64(minInterval.Seconds())
+	if sec < 1 {
+		sec = 1
+	}
+	const q = `
+UPDATE transactions SET last_status_check_at = NOW(), updated_at = NOW()
+WHERE ref_id = $1
+  AND digiflazz_status = '0'
+  AND order_submitted = TRUE
+  AND (last_status_check_at IS NULL OR last_status_check_at < NOW() - make_interval(secs => $2))
+RETURNING ref_id`
+	var got string
+	err := r.pool.QueryRow(ctx, q, refID, sec).Scan(&got)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// ListPendingForReconcile mengambil transaksi pending yang layak di-poll checktoday (hari ini di timezone).
+func (r *Repository) ListPendingForReconcile(
+	ctx context.Context,
+	tz string,
+	limit int,
+	minAge time.Duration,
+) ([]Transaction, error) {
+	const q = `
+SELECT id, ref_id, hp, pulsa_code, price, response_price, digiflazz_username,
+       digiflazz_status, digiflazz_rc, message, sn, tr_id, balance,
+       atrilinks_status, upstream_raw, order_submitted, callback_sent_at,
+       created_at, last_status_check_at
+FROM transactions
+WHERE digiflazz_status = '0'
+  AND order_submitted = TRUE
+  AND (created_at AT TIME ZONE $1)::date = (NOW() AT TIME ZONE $1)::date
+  AND updated_at < NOW() - make_interval(secs => $2)
+ORDER BY COALESCE(last_status_check_at, created_at) ASC
+LIMIT $3`
+	minSec := int64(minAge.Seconds())
+	if minSec < 1 {
+		minSec = 1
+	}
+	rows, err := r.pool.Query(ctx, q, tz, minSec, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []Transaction
+	for rows.Next() {
+		var t Transaction
+		if err := rows.Scan(
+			&t.ID, &t.RefID, &t.HP, &t.PulsaCode, &t.Price, &t.ResponsePrice, &t.DigiflazzUsername,
+			&t.DigiflazzStatus, &t.DigiflazzRC, &t.Message, &t.SN, &t.TrID, &t.Balance,
+			&t.AtrilinksStatus, &t.UpstreamRaw, &t.OrderSubmitted, &t.CallbackSentAt,
+			&t.CreatedAt, &t.LastStatusCheckAt,
+		); err != nil {
+			return nil, err
+		}
+		out = append(out, t)
+	}
+	return out, rows.Err()
+}
+
 // scanTx memetakan satu baris query ke struct Transaction.
 func scanTx(row pgx.Row) (Transaction, error) {
 	var t Transaction
@@ -114,6 +186,7 @@ func scanTx(row pgx.Row) (Transaction, error) {
 		&t.ID, &t.RefID, &t.HP, &t.PulsaCode, &t.Price, &t.ResponsePrice, &t.DigiflazzUsername,
 		&t.DigiflazzStatus, &t.DigiflazzRC, &t.Message, &t.SN, &t.TrID, &t.Balance,
 		&t.AtrilinksStatus, &t.UpstreamRaw, &t.OrderSubmitted, &t.CallbackSentAt,
+		&t.CreatedAt, &t.LastStatusCheckAt,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Transaction{}, ErrNotFound

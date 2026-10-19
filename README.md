@@ -7,7 +7,8 @@ Addon **Seller API** untuk [Digiflazz](https://developer.digiflazz.com/api/selle
 - **Topup & cek status** — idempoten berdasarkan `ref_id` (topup ulang dengan `ref_id` sama mengembalikan state dari database, tanpa order ulang ke Atrilinks).
 - **Validasi Digiflazz** — verifikasi `sign` = `md5(username + apiKey + ref_id)` dan `username` dari environment.
 - **Integrasi Atrilinks (metode Atrilinks + BLAKE3)** — transaksi prabayar fixed (`jenistrx=1`) via `GET /h2h/trx/atrilinks`, dengan `sign` dan `urlcallback`.
-- **Callback Atrilinks** — update status dari notifikasi upstream (`msg` / JSON); webhook ke Digiflazz saat status final.
+- **Callback Atrilinks** — update status dari notifikasi upstream (`msg` / JSON); jawab `200 OK` cepat, webhook Digiflazz di background.
+- **Rekonsiliasi pending** — saat Digiflazz cek status (`ref_id` sama) atau worker latar belakang memanggil Atrilinks `checktoday` (transaksi hari ini) bila callback hilang/timeout.
 - **Mapping status** — Atrilinks (`success` / `pending` / `failed`) → Digiflazz (`status` `0`/`1`/`2` + `rc`).
 - **PostgreSQL** — persistensi transaksi, audit response upstream (JSON), pelacakan webhook.
 
@@ -29,8 +30,8 @@ sign     = blake3_256(combined)   → hex lowercase, 64 karakter
 ```text
 Digiflazz  →  POST topup (addon)
 Addon      →  validasi sign → DB (ref_id) → Atrilinks /h2h/trx/atrilinks (+ sign, urlcallback)
-Atrilinks  →  callback status → addon → update DB
-Addon      →  webhook Digiflazz (jika sukses/gagal)
+Atrilinks  →  callback status → addon → update DB → OK cepat → webhook Digiflazz (async)
+Addon      →  (fallback) checktoday saat replay pending / worker
 Digiflazz  ←  response { "data": { ... } }
 ```
 
@@ -67,6 +68,7 @@ Salin [`.env.example`](./.env.example) ke `.env`.
 | `ATRILINKS_PASS` | Password untuk bahan `combined` sign |
 | `ATRILINKS_PIN` | PIN untuk bahan `combined` sign |
 | `ADDON_ATRILINKS_CALLBACK_URL` | URL publik callback (path `/h2h/atrilinks/callback`) |
+| `PENDING_WORKER_*`, `PENDING_RECONCILE_*`, `RECONCILE_TIMEZONE` | Worker & throttle poll `checktoday` (lihat `.env.example`) |
 
 Jangan commit `.env`. Jangan log `sign`, `pin`, atau `password`.
 
@@ -87,6 +89,7 @@ internal/digiflazz/   # sign MD5 Digiflazz, mapper, webhook
 internal/handler/
 internal/service/
 internal/repository/
+internal/worker/      # poll pending → checktoday
 migrations/
 ```
 

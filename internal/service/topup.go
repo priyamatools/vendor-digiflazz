@@ -65,6 +65,19 @@ func (s *TopupService) HandleTopup(ctx context.Context, req digiflazz.TopupReque
 	existing, err := s.repo.GetByRefID(ctx, req.RefID)
 	if err == nil {
 		if existing.OrderSubmitted {
+			if existing.DigiflazzStatus == "0" {
+				data, reconciled, recErr := s.reconcilePending(ctx, existing, true)
+				if recErr != nil {
+					return digiflazz.ResponseData{}, recErr
+				}
+				if reconciled {
+					return data, nil
+				}
+				existing, err = s.repo.GetByRefID(ctx, req.RefID)
+				if err != nil {
+					return digiflazz.ResponseData{}, err
+				}
+			}
 			return digiflazz.FromStored(
 				existing.RefID, existing.HP, existing.PulsaCode, existing.Price, existing.ResponsePrice,
 				existing.DigiflazzStatus, existing.DigiflazzRC, existing.Message,
@@ -104,7 +117,7 @@ func (s *TopupService) HandleTopup(ctx context.Context, req digiflazz.TopupReque
 		}, nil
 	}
 
-	return s.persistUpstream(ctx, req.RefID, req.HP, kodeProduk, req.Price, raw, up, true)
+	return s.persistUpstream(ctx, req.RefID, req.HP, kodeProduk, req.Price, raw, up, true, false)
 }
 
 // HandleAtrilinksCallback memproses notifikasi urlcallback dari Atrilinks.
@@ -125,7 +138,7 @@ func (s *TopupService) HandleAtrilinksCallback(ctx context.Context, raw []byte) 
 		return err
 	}
 
-	_, err = s.persistUpstream(ctx, tx.RefID, tx.HP, tx.PulsaCode, tx.Price, raw, up, true)
+	_, err = s.persistUpstream(ctx, tx.RefID, tx.HP, tx.PulsaCode, tx.Price, raw, up, true, true)
 	return err
 }
 
@@ -137,6 +150,7 @@ func (s *TopupService) persistUpstream(
 	raw []byte,
 	up atrilinks.TransactionResponse,
 	orderSubmitted bool,
+	webhookAsync bool,
 ) (digiflazz.ResponseData, error) {
 	up = s.enrichUpstreamHarga(ctx, refID, up, raw)
 	data := digiflazz.MapFromUpstream(up, refID, hp, pulsaCode, price)
@@ -162,19 +176,7 @@ func (s *TopupService) persistUpstream(
 		return digiflazz.ResponseData{}, err
 	}
 
-	if data.Status == "1" || data.Status == "2" {
-		tx, err := s.repo.GetByRefID(ctx, refID)
-		if err != nil {
-			return data, err
-		}
-		if tx.CallbackSentAt == nil {
-			if err := s.webhook.Send(ctx, data); err != nil {
-				s.log.Error("digiflazz webhook", "ref_id", refID, "err", err)
-			} else if err := s.repo.MarkCallbackSent(ctx, refID); err != nil {
-				s.log.Error("mark callback sent", "ref_id", refID, "err", err)
-			}
-		}
-	}
+	s.notifyDigiflazzFinal(ctx, refID, data, webhookAsync)
 
 	return data, nil
 }

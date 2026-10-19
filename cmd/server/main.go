@@ -19,6 +19,7 @@ import (
 	"github.com/addon-vendor-digiflazz/internal/migrate"
 	"github.com/addon-vendor-digiflazz/internal/repository"
 	"github.com/addon-vendor-digiflazz/internal/service"
+	"github.com/addon-vendor-digiflazz/internal/worker"
 )
 
 // main memuat konfigurasi, migrasi DB, dan menjalankan server HTTP.
@@ -65,6 +66,10 @@ func main() {
 	webhook := digiflazz.NewWebhookClient(cfg.DigiflazzCallbackURL, log, cfg.Development)
 	svc := service.NewTopupService(cfg, repo, atClient, webhook, log)
 
+	workerCtx, workerCancel := context.WithCancel(ctx)
+	defer workerCancel()
+	go worker.RunPendingReconcile(workerCtx, cfg, svc, log)
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -93,6 +98,8 @@ func main() {
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
 	<-stop
+
+	workerCancel()
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()

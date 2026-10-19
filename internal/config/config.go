@@ -5,6 +5,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/joho/godotenv"
 )
@@ -25,6 +26,14 @@ type Config struct {
 	AtrilinksPIN              string
 	AtrilinksPass             string
 	AddonAtrilinksCallbackURL string
+
+	// Rekonsiliasi pending (checktoday) saat Digiflazz replay & worker latar belakang.
+	PendingWorkerEnabled   bool
+	PendingWorkerInterval  time.Duration
+	PendingWorkerBatchSize int
+	PendingReconcileMinAge time.Duration
+	PendingReconcileThrottle time.Duration
+	ReconcileTimezone      string
 }
 
 // Load membaca .env dan memvalidasi variabel wajib.
@@ -71,6 +80,23 @@ func Load() (Config, error) {
 		return Config{}, fmt.Errorf("ADDON_ATRILINKS_CALLBACK_URL wajib diisi")
 	}
 
+	cfg.PendingWorkerEnabled = envBoolOr("PENDING_WORKER_ENABLED", true)
+	cfg.PendingWorkerInterval = envDurationSecOr("PENDING_WORKER_INTERVAL_SEC", 120)
+	cfg.PendingWorkerBatchSize = envIntOr("PENDING_WORKER_BATCH_SIZE", 50)
+	cfg.PendingReconcileMinAge = envDurationSecOr("PENDING_RECONCILE_MIN_AGE_SEC", 30)
+	cfg.PendingReconcileThrottle = envDurationSecOr("PENDING_RECONCILE_THROTTLE_SEC", 60)
+	cfg.ReconcileTimezone = envOr("RECONCILE_TIMEZONE", "Asia/Jakarta")
+
+	if cfg.PendingWorkerBatchSize < 1 {
+		cfg.PendingWorkerBatchSize = 1
+	}
+	if cfg.PendingWorkerInterval < 10*time.Second {
+		cfg.PendingWorkerInterval = 10 * time.Second
+	}
+	if cfg.PendingReconcileThrottle < 5*time.Second {
+		cfg.PendingReconcileThrottle = 5 * time.Second
+	}
+
 	return cfg, nil
 }
 
@@ -80,6 +106,44 @@ func envOr(key, def string) string {
 		return v
 	}
 	return def
+}
+
+// envIntOr membaca integer dari env atau default.
+func envIntOr(key string, def int) int {
+	v := strings.TrimSpace(os.Getenv(key))
+	if v == "" {
+		return def
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil {
+		return def
+	}
+	return n
+}
+
+// envBoolOr membaca boolean dari env (true/1/yes) atau default.
+func envBoolOr(key string, def bool) bool {
+	v := strings.ToLower(strings.TrimSpace(os.Getenv(key)))
+	if v == "" {
+		return def
+	}
+	switch v {
+	case "true", "1", "yes", "on":
+		return true
+	case "false", "0", "no", "off":
+		return false
+	default:
+		return def
+	}
+}
+
+// envDurationSecOr membaca durasi dalam detik dari env.
+func envDurationSecOr(key string, defSec int) time.Duration {
+	sec := envIntOr(key, defSec)
+	if sec < 0 {
+		sec = defSec
+	}
+	return time.Duration(sec) * time.Second
 }
 
 // isDevelopment true jika mode debug/logging pengembangan aktif.
